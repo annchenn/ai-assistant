@@ -63,7 +63,7 @@ ${noteList}
 
 When the user asks you to add, update, create, or modify notes use the provided tools.
 For appending items (e.g. "add X to my TODO list") use append_to_note.
-After calling a tool, confirm what you did in a friendly short sentence.`,
+After calling a tool you MUST always reply with a short confirmation message like "Done! I've added X to your note." — never leave the response empty.`,
     }],
   };
 }
