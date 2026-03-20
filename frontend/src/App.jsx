@@ -3,7 +3,8 @@ import Chat from "./components/Chat";
 import Notes from "./components/Notes";
 import WordGame from "./components/WordGame";
 import ApiKeySetup from "./components/ApiKeySetup";
-import { loadApiKey, clearApiKey, loadNotes, saveNotes } from "./lib/storage";
+import { loadApiKey, clearApiKey, loadNotes, saveNotes, loadModel, saveModel } from "./lib/storage";
+import { DEFAULT_MODEL } from "./lib/gemini";
 import "./App.css";
 
 const TABS = [
@@ -17,8 +18,10 @@ export default function App() {
   const [tab,    setTab]    = useState("Chat");
   // Shared notes state — both Chat (for AI tools) and Notes tab use this
   const [notes,  setNotes]  = useState(() => loadNotes());
+  const [model,  setModel]  = useState(() => loadModel() || DEFAULT_MODEL);
 
   useEffect(() => { saveNotes(notes); }, [notes]);
+  useEffect(() => { saveModel(model); }, [model]);
 
   function handleLogout() { clearApiKey(); setApiKey(null); }
 
@@ -42,7 +45,7 @@ export default function App() {
         </nav>
       </header>
       <main className="main">
-        {tab === "Chat"      && <Chat apiKey={apiKey} notes={notes} setNotes={setNotes} />}
+        {tab === "Chat"      && <Chat apiKey={apiKey} notes={notes} setNotes={setNotes} model={model} setModel={setModel} />}
         {tab === "Notes"     && <Notes notes={notes} setNotes={setNotes} />}
         {tab === "Word Game" && <WordGame />}
       </main>

@@ -11,6 +11,14 @@ export function clearApiKey() {
   localStorage.removeItem("gemini_api_key");
 }
 
+// ── Model ──────────────────────────────────────────────
+export function loadModel() {
+  return localStorage.getItem("gemini_model") || null;
+}
+export function saveModel(model) {
+  localStorage.setItem("gemini_model", model);
+}
+
 // ── Chats ─────────────────────────────────────────────
 export function loadChats() {
   try { return JSON.parse(localStorage.getItem("chats") || "[]"); }

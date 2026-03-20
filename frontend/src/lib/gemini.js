@@ -1,5 +1,14 @@
-const MODEL = "gemini-2.5-flash";
-const BASE  = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}`;
+export const AVAILABLE_MODELS = [
+  { id: "gemini-2.5-pro",   label: "Gemini 2.5 Pro",   desc: "Most capable, slower" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash",  desc: "Fast & smart (default)" },
+  { id: "gemini-2.5-flash-lite-preview-09-2025", label: "Gemini 2.5 Flash Lite", desc: "Fastest, lightest" },
+];
+
+export const DEFAULT_MODEL = "gemini-2.5-flash";
+
+function getBase(model) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model || DEFAULT_MODEL}`;
+}
 
 // ── Note tools the AI can call ────────────────────────────────────────────────
 export const NOTE_TOOLS = [
@@ -68,7 +77,7 @@ After calling a tool, confirm what you did in a friendly short sentence.`,
  * @param {Array}    notes       - current notes array (for context)
  * @param {Function} onFunctionCall - async (call) => result  — execute note op
  */
-export async function* streamChat(apiKey, history, message, attachments, notes, onFunctionCall) {
+export async function* streamChat(apiKey, history, message, attachments, notes, onFunctionCall, model) {
   // Build user parts
   const userParts = [{ text: message }];
   for (const att of attachments || []) {
@@ -99,7 +108,7 @@ export async function* streamChat(apiKey, history, message, attachments, notes, 
       ...(systemIns  ? { systemInstruction: systemIns }   : {}),
     };
 
-    const res = await fetch(`${BASE}:streamGenerateContent?alt=sse&key=${apiKey}`, {
+    const res = await fetch(`${getBase(model)}:streamGenerateContent?alt=sse&key=${apiKey}`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(body),
@@ -174,7 +183,7 @@ export async function* streamChat(apiKey, history, message, attachments, notes, 
 
 // ── Validate API key ──────────────────────────────────────────────────────────
 export async function validateApiKey(apiKey) {
-  const res = await fetch(`${BASE}:generateContent?key=${apiKey}`, {
+  const res = await fetch(`${getBase()}:generateContent?key=${apiKey}`, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }] }),
