@@ -1,5 +1,16 @@
 import { v4 as uuid } from "uuid";
 
+// ── API Key ────────────────────────────────────────────
+export function loadApiKey() {
+  return localStorage.getItem("gemini_api_key") || null;
+}
+export function saveApiKey(key) {
+  localStorage.setItem("gemini_api_key", key);
+}
+export function clearApiKey() {
+  localStorage.removeItem("gemini_api_key");
+}
+
 // ── Chats ─────────────────────────────────────────────
 export function loadChats() {
   try { return JSON.parse(localStorage.getItem("chats") || "[]"); }

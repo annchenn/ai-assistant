@@ -1,16 +1,24 @@
-// Calls our own serverless proxy — API key never reaches the browser
-const PROXY = "/api/chat";
+const MODEL = "gemini-2.5-flash";
+const BASE  = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}`;
 
-export async function* streamChat(history, newMessage) {
-  const res = await fetch(PROXY, {
+export async function* streamChat(apiKey, history, newMessage) {
+  const contents = [
+    ...(history || []).map((m) => ({
+      role: m.role === "ai" ? "model" : "user",
+      parts: [{ text: m.text }],
+    })),
+    { role: "user", parts: [{ text: newMessage }] },
+  ];
+
+  const res = await fetch(`${BASE}:streamGenerateContent?alt=sse&key=${apiKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ history, message: newMessage }),
+    body: JSON.stringify({ contents }),
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error || `HTTP ${res.status}`);
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
   }
 
   const reader  = res.body.getReader();
@@ -33,9 +41,23 @@ export async function* streamChat(history, newMessage) {
         const json  = JSON.parse(raw);
         const chunk = json?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (chunk) yield chunk;
-      } catch {
-        // skip malformed chunk
-      }
+      } catch { /* skip */ }
     }
   }
+}
+
+export async function validateApiKey(apiKey) {
+  const res = await fetch(
+    `${BASE}:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }] }),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || "Invalid API key");
+  }
+  return true;
 }

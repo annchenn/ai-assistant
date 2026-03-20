@@ -4,7 +4,7 @@ import { streamChat } from "../lib/gemini";
 import { loadChats, saveChats, createChat } from "../lib/storage";
 import "./Chat.css";
 
-export default function Chat() {
+export default function Chat({ apiKey }) {
   const [chats, setChats]       = useState(() => {
     const saved = loadChats();
     return saved.length ? saved : [createChat()];
@@ -84,7 +84,7 @@ export default function Chat() {
       const history = activeChat.messages; // snapshot before new messages
       let fullText  = "";
 
-      for await (const chunk of streamChat(history, text)) {
+      for await (const chunk of streamChat(apiKey, history, text)) {
         fullText += chunk;
         const captured = fullText;
         updateChat(activeId, (c) => {

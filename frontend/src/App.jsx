@@ -1,30 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Chat from "./components/Chat";
 import Notes from "./components/Notes";
 import WordGame from "./components/WordGame";
+import ApiKeySetup from "./components/ApiKeySetup";
+import { loadApiKey, clearApiKey } from "./lib/storage";
 import "./App.css";
 
 const TABS = [
-  { id: "Chat", icon: "💬" },
-  { id: "Notes", icon: "📝" },
+  { id: "Chat",      icon: "💬" },
+  { id: "Notes",     icon: "📝" },
   { id: "Word Game", icon: "🎮" },
 ];
 
-const API = "http://localhost:8000";
-
 export default function App() {
-  const [tab, setTab] = useState("Chat");
-  const [online, setOnline] = useState(null);
+  const [apiKey, setApiKey] = useState(() => loadApiKey());
+  const [tab,    setTab]    = useState("Chat");
 
-  useEffect(() => {
-    const check = () =>
-      fetch(`${API}/api/notes`)
-        .then(() => setOnline(true))
-        .catch(() => setOnline(false));
-    check();
-    const id = setInterval(check, 5000);
-    return () => clearInterval(id);
-  }, []);
+  function handleLogout() {
+    clearApiKey();
+    setApiKey(null);
+  }
+
+  if (!apiKey) {
+    return <ApiKeySetup onDone={setApiKey} />;
+  }
 
   return (
     <div className="app">
@@ -32,10 +31,14 @@ export default function App() {
         <div className="header-top">
           <div className="logo-icon">✦</div>
           <h1>My AI Assistant</h1>
-          <span style={{ marginLeft: "auto", fontSize: 12, color: "#aeaeb2" }}>
-            <span className={`status-dot ${online === true ? "online" : online === false ? "offline" : ""}`} />
-            {online === true ? "Connected" : online === false ? "Backend offline" : "Checking…"}
-          </span>
+          <button
+            className="btn btn-ghost"
+            style={{ marginLeft: "auto", fontSize: 13 }}
+            onClick={handleLogout}
+            title="Change API key"
+          >
+            🔑 Change Key
+          </button>
         </div>
         <nav className="tabs">
           {TABS.map(({ id, icon }) => (
@@ -50,8 +53,8 @@ export default function App() {
         </nav>
       </header>
       <main className="main">
-        {tab === "Chat" && <Chat />}
-        {tab === "Notes" && <Notes />}
+        {tab === "Chat"      && <Chat apiKey={apiKey} />}
+        {tab === "Notes"     && <Notes />}
         {tab === "Word Game" && <WordGame />}
       </main>
     </div>
