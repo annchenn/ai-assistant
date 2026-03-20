@@ -131,8 +131,9 @@ export default function Chat({ apiKey, notes, setNotes, model, setModel }) {
     const chatName = isFirst ? (text.slice(0, 36) + (text.length > 36 ? "…" : "")) || atts[0]?.name : activeChat.name;
 
     const userMsg = { role: "user", text: text || `[${atts.map(a => a.name).join(", ")}]`, attachments: atts };
+    const aiMsgId = Date.now();
     updateChat(activeId, (c) => ({ ...c, name: chatName, messages: [...c.messages, userMsg] }));
-    updateChat(activeId, (c) => ({ ...c, messages: [...c.messages, { role: "ai", text: "", streaming: true }] }));
+    updateChat(activeId, (c) => ({ ...c, messages: [...c.messages, { id: aiMsgId, role: "ai", text: "", streaming: true }] }));
 
     setLoading(true);
     try {
@@ -143,21 +144,23 @@ export default function Chat({ apiKey, notes, setNotes, model, setModel }) {
         fullText += chunk;
         const captured = fullText;
         updateChat(activeId, (c) => {
-          const msgs = [...c.messages];
-          msgs[msgs.length - 1] = { role: "ai", text: captured, streaming: true };
+          const msgs = c.messages.map((m) =>
+            m.id === aiMsgId ? { ...m, text: captured, streaming: true } : m
+          );
           return { ...c, messages: msgs };
         });
       }
 
       updateChat(activeId, (c) => {
-        const msgs = [...c.messages];
-        msgs[msgs.length - 1] = { role: "ai", text: fullText, streaming: false };
+        const msgs = c.messages.map((m) =>
+          m.id === aiMsgId ? { ...m, text: fullText, streaming: false } : m
+        );
         return { ...c, messages: msgs };
       });
     } catch (e) {
       console.error("[Chat]", e);
       setError(e.message);
-      updateChat(activeId, (c) => ({ ...c, messages: c.messages.filter((m) => !(m.streaming && !m.text)) }));
+      updateChat(activeId, (c) => ({ ...c, messages: c.messages.filter((m) => !(m.id === aiMsgId && !m.text)) }));
     } finally {
       setLoading(false);
     }
@@ -217,7 +220,7 @@ export default function Chat({ apiKey, notes, setNotes, model, setModel }) {
               <em>"add X to my [note name]"</em> to update your notes!
             </div>
           )}
-          {messages.map((m, i) => (
+          {messages.filter((m) => !(m.role === "ai" && m.streaming && !m.text)).map((m, i) => (
             <div key={i} className={`msg ${m.role}`}>
               <div className="bubble">
                 {m.role === "user" && m.attachments?.length > 0 && (
@@ -230,14 +233,14 @@ export default function Chat({ apiKey, notes, setNotes, model, setModel }) {
                   </div>
                 )}
                 {m.role === "ai" ? (
-                  <><ReactMarkdown>{m.text || " "}</ReactMarkdown>{m.streaming && <span className="stream-cursor" />}</>
+                  <><ReactMarkdown>{m.text}</ReactMarkdown>{m.streaming && <span className="stream-cursor" />}</>
                 ) : (
                   m.text && <span>{m.text}</span>
                 )}
               </div>
             </div>
           ))}
-          {loading && !messages.some((m) => m.streaming) && (
+          {loading && !messages.some((m) => m.streaming && m.text) && (
             <div className="msg ai"><div className="bubble typing"><span /><span /><span /></div></div>
           )}
           <div ref={bottomRef} />
