@@ -1,32 +1,16 @@
-// Direct Gemini REST API — no backend needed
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const MODEL   = "gemini-2.5-flash";
-const BASE    = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}`;
+// Calls our own serverless proxy — API key never reaches the browser
+const PROXY = "/api/chat";
 
-/**
- * Stream a chat response given full message history.
- * history: [{role: "user"|"ai", text: string}]
- * Yields text chunks as they arrive.
- */
 export async function* streamChat(history, newMessage) {
-  // Build Gemini contents array from history + new message
-  const contents = [
-    ...history.map((m) => ({
-      role: m.role === "ai" ? "model" : "user",
-      parts: [{ text: m.text }],
-    })),
-    { role: "user", parts: [{ text: newMessage }] },
-  ];
-
-  const res = await fetch(`${BASE}:streamGenerateContent?alt=sse&key=${API_KEY}`, {
+  const res = await fetch(PROXY, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents }),
+    body: JSON.stringify({ history, message: newMessage }),
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+    throw new Error(err?.error || `HTTP ${res.status}`);
   }
 
   const reader  = res.body.getReader();
@@ -39,7 +23,7 @@ export async function* streamChat(history, newMessage) {
 
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
-    buffer = lines.pop(); // keep incomplete line
+    buffer = lines.pop();
 
     for (const line of lines) {
       if (!line.startsWith("data: ")) continue;
