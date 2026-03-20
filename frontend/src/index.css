@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  /* Ultra-transparent liquid glass */
+  --glass-bg:        rgba(255,255,255,0.28);
+  --glass-bg-deep:   rgba(255,255,255,0.42);
+  --glass-border:    rgba(255,255,255,0.55);
+  --glass-shadow:    0 10px 40px rgba(100,120,200,0.14), 0 2px 8px rgba(0,0,0,0.06);
+  --glass-specular:  inset 0 1.5px 0 rgba(255,255,255,0.88), inset 0 -1px 0 rgba(0,0,0,0.03);
+  --glass-blur:      blur(56px) saturate(220%) brightness(1.06);
+
+  --blue:    #007AFF;
+  --blue-lt: #5AC8FA;
+  --text:    #1c1c1e;
+  --text-2:  #3a3a3c;
+  --text-3:  #8e8e93;
+  --red:     #FF3B30;
+  --green:   #34C759;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+  overflow-x: hidden;
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 5%,  #bdeeff 0%, transparent 55%),
+    radial-gradient(ellipse 60% 70% at 90% 15%,  #cfc3ff 0%, transparent 55%),
+    radial-gradient(ellipse 70% 60% at 50% 90%,  #ffe0d0 0%, transparent 55%),
+    radial-gradient(ellipse 50% 50% at 80% 75%,  #b8f0ea 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 20% 70%,  #fcd5f0 0%, transparent 50%),
+    linear-gradient(160deg, #dff2ff 0%, #eae6ff 40%, #fff4ee 100%);
+  background-attachment: fixed;
+}
+
+body::before, body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(70px);
+  opacity: 0.5;
+}
+
+body::before {
+  width: 580px; height: 580px;
+  top: -160px; left: -160px;
+  background: radial-gradient(circle, #98deff 0%, #c0b0ff 100%);
+  animation: blob1 18s ease-in-out infinite;
+}
+
+body::after {
+  width: 640px; height: 640px;
+  bottom: -180px; right: -180px;
+  background: radial-gradient(circle, #ffcfb0 0%, #ffb8cc 100%);
+  animation: blob2 22s ease-in-out infinite;
+}
+
+@keyframes blob1 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  33%      { transform: translate(80px,60px) scale(1.1); }
+  66%      { transform: translate(-40px,100px) scale(0.93); }
+}
+@keyframes blob2 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  33%      { transform: translate(-70px,-50px) scale(1.08); }
+  66%      { transform: translate(50px,-90px) scale(1.14); }
+}
+
+#root { min-height: 100vh; position: relative; z-index: 1; }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
