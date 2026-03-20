@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { streamChat } from "../lib/gemini";
+import { streamChat, AVAILABLE_MODELS } from "../lib/gemini";
 import { loadChats, saveChats, createChat, createNote } from "../lib/storage";
 import "./Chat.css";
 
-export default function Chat({ apiKey, notes, setNotes }) {
+export default function Chat({ apiKey, notes, setNotes, model, setModel }) {
   const [chats,       setChats]       = useState(() => { const s = loadChats(); return s.length ? s : [createChat()]; });
   const [activeId,    setActiveId]    = useState(() => { const s = loadChats(); return s.length ? s[0].id : null; });
   const [input,       setInput]       = useState("");
@@ -139,7 +139,7 @@ export default function Chat({ apiKey, notes, setNotes }) {
       const history  = activeChat.messages;
       let   fullText = "";
 
-      for await (const chunk of streamChat(apiKey, history, text, atts, notes, handleFunctionCall)) {
+      for await (const chunk of streamChat(apiKey, history, text, atts, notes, handleFunctionCall, model)) {
         fullText += chunk;
         const captured = fullText;
         updateChat(activeId, (c) => {
@@ -196,6 +196,18 @@ export default function Chat({ apiKey, notes, setNotes }) {
         <div className="chat-header">
           <button className="sidebar-toggle" onClick={() => setSidebarOpen((o) => !o)}>☰</button>
           <span className="chat-title">{activeChat?.name || "New Chat"}</span>
+          <div className="model-selector">
+            {AVAILABLE_MODELS.map((m) => (
+              <button
+                key={m.id}
+                className={`model-btn ${model === m.id ? "active" : ""}`}
+                onClick={() => setModel(m.id)}
+                title={m.desc}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="messages">
