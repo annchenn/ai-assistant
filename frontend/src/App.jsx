@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Chat from "./components/Chat";
 import Notes from "./components/Notes";
 import WordGame from "./components/WordGame";
 import ApiKeySetup from "./components/ApiKeySetup";
-import { loadApiKey, clearApiKey } from "./lib/storage";
+import { loadApiKey, clearApiKey, loadNotes, saveNotes } from "./lib/storage";
 import "./App.css";
 
 const TABS = [
@@ -15,15 +15,14 @@ const TABS = [
 export default function App() {
   const [apiKey, setApiKey] = useState(() => loadApiKey());
   const [tab,    setTab]    = useState("Chat");
+  // Shared notes state — both Chat (for AI tools) and Notes tab use this
+  const [notes,  setNotes]  = useState(() => loadNotes());
 
-  function handleLogout() {
-    clearApiKey();
-    setApiKey(null);
-  }
+  useEffect(() => { saveNotes(notes); }, [notes]);
 
-  if (!apiKey) {
-    return <ApiKeySetup onDone={setApiKey} />;
-  }
+  function handleLogout() { clearApiKey(); setApiKey(null); }
+
+  if (!apiKey) return <ApiKeySetup onDone={setApiKey} />;
 
   return (
     <div className="app">
@@ -31,30 +30,20 @@ export default function App() {
         <div className="header-top">
           <div className="logo-icon">✦</div>
           <h1>My AI Assistant</h1>
-          <button
-            className="btn btn-ghost"
-            style={{ marginLeft: "auto", fontSize: 13 }}
-            onClick={handleLogout}
-            title="Change API key"
-          >
-            🔑 Change Key
-          </button>
+          <button className="btn btn-ghost key-btn" onClick={handleLogout}>🔑 Key</button>
         </div>
         <nav className="tabs">
           {TABS.map(({ id, icon }) => (
-            <button
-              key={id}
-              className={`tab-btn ${tab === id ? "active" : ""}`}
-              onClick={() => setTab(id)}
-            >
-              {icon} {id}
+            <button key={id} className={`tab-btn ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>
+              <span className="tab-icon">{icon}</span>
+              <span className="tab-label">{id}</span>
             </button>
           ))}
         </nav>
       </header>
       <main className="main">
-        {tab === "Chat"      && <Chat apiKey={apiKey} />}
-        {tab === "Notes"     && <Notes />}
+        {tab === "Chat"      && <Chat apiKey={apiKey} notes={notes} setNotes={setNotes} />}
+        {tab === "Notes"     && <Notes notes={notes} setNotes={setNotes} />}
         {tab === "Word Game" && <WordGame />}
       </main>
     </div>
