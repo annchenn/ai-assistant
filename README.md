@@ -1,6 +1,22 @@
 # My AI Assistant
 
-A browser-based AI assistant powered by Google Gemini, built with React.
+A browser-based AI assistant powered by Google Gemini.
+
+## Live Demo
+
+> **https://annchenn.github.io/ai-assistant/**
+
+No installation needed — just open the link in your browser.
+
+### Getting Started
+
+1. Go to [https://annchenn.github.io/ai-assistant/](https://annchenn.github.io/ai-assistant/)
+2. Enter your **Gemini API key** ([get one free here](https://aistudio.google.com/app/apikey))
+3. Start chatting!
+
+Your API key is stored only in your browser's localStorage and is sent directly to the Gemini API — it never passes through any server.
+
+---
 
 ## Features
 
@@ -19,22 +35,7 @@ A browser-based AI assistant powered by Google Gemini, built with React.
 ### Word Game
 - A simple word-based mini-game for fun
 
-## Getting Started
-
-1. Clone the repo and install dependencies:
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-2. Start the dev server:
-   ```bash
-   npm run dev
-   ```
-
-3. Open `http://localhost:5173` in your browser.
-
-4. Enter your [Gemini API key](https://aistudio.google.com/app/apikey) when prompted. The key is stored only in your browser's localStorage and never sent anywhere except directly to the Gemini API.
+---
 
 ## Tech Stack
 
