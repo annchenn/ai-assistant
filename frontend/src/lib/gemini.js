@@ -57,13 +57,12 @@ function buildSystemInstruction(notes) {
     : "(no notes yet)";
   return {
     parts: [{
-      text: `You are a helpful AI assistant with access to the user's notes system.
-Current notes:
+      text: `You are a helpful AI assistant. You can answer questions, have conversations, tell stories, help with tasks, and anything else the user needs.
+
+You also have access to the user's notes system. Current notes:
 ${noteList}
 
-When the user asks you to add, update, create, or modify notes use the provided tools.
-For appending items (e.g. "add X to my TODO list") use append_to_note.
-After calling a tool, confirm what you did in a friendly short sentence.`,
+Only use the note tools when the user explicitly asks to create, update, or modify a note. After calling a tool, confirm what you did in a friendly short sentence.`,
     }],
   };
 }
