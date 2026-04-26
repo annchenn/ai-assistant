@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { streamChat, AVAILABLE_MODELS } from "../lib/gemini";
+import { streamChat, AVAILABLE_MODELS, extractMemories } from "../lib/api";
 import { loadChats, saveChats, createChat, createNote } from "../lib/storage";
 import "./Chat.css";
 
-export default function Chat({ apiKey, notes, setNotes, model, setModel }) {
+export default function Chat({ notes, setNotes, model, setModel, memories }) {
   const [chats,       setChats]       = useState(() => { const s = loadChats(); return s.length ? s : [createChat()]; });
   const [activeId,    setActiveId]    = useState(() => { const s = loadChats(); return s.length ? s[0].id : null; });
   const [input,       setInput]       = useState("");
@@ -13,8 +13,9 @@ export default function Chat({ apiKey, notes, setNotes, model, setModel }) {
   const [attachments, setAttachments] = useState([]);   // [{type,name,mimeType?,data?,content?,preview?}]
   const [toast,       setToast]       = useState(null); // {msg, ok}
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const bottomRef  = useRef(null);
+  const bottomRef    = useRef(null);
   const fileInputRef = useRef(null);
+  const usedModelRef = useRef(null);
 
   useEffect(() => { if (!activeId && chats.length) setActiveId(chats[0].id); }, []);
   useEffect(() => { saveChats(chats); }, [chats]);
@@ -135,25 +136,41 @@ export default function Chat({ apiKey, notes, setNotes, model, setModel }) {
     updateChat(activeId, (c) => ({ ...c, messages: [...c.messages, { role: "ai", text: "", streaming: true }] }));
 
     setLoading(true);
+    usedModelRef.current = null;
     try {
       const history  = activeChat.messages;
       let   fullText = "";
 
-      for await (const chunk of streamChat(apiKey, history, text, atts, notes, handleFunctionCall, model)) {
-        fullText += chunk;
-        const captured = fullText;
-        updateChat(activeId, (c) => {
-          const msgs = [...c.messages];
-          msgs[msgs.length - 1] = { role: "ai", text: captured, streaming: true };
-          return { ...c, messages: msgs };
-        });
+      for await (const chunk of streamChat(history, text, atts, notes, memories || [], (m) => { usedModelRef.current = m; }, model)) {
+        if (typeof chunk === "string") {
+          fullText += chunk;
+          updateChat(activeId, (c) => {
+            const msgs = [...c.messages];
+            msgs[msgs.length - 1] = { role: "ai", text: fullText, streaming: true, usedModel: null };
+            return { ...c, messages: msgs };
+          });
+        } else if (chunk.image) {
+          updateChat(activeId, (c) => {
+            const msgs = [...c.messages];
+            const last = msgs[msgs.length - 1];
+            const images = [...(last.images || []), { data: chunk.image, mimeType: chunk.mimeType }];
+            msgs[msgs.length - 1] = { ...last, images, streaming: true };
+            return { ...c, messages: msgs };
+          });
+        } else if (chunk.noteOp) {
+          await handleFunctionCall({ name: chunk.name, args: chunk.args });
+        }
       }
 
+      const capturedModel = usedModelRef.current;
       updateChat(activeId, (c) => {
         const msgs = [...c.messages];
-        msgs[msgs.length - 1] = { role: "ai", text: fullText, streaming: false };
+        msgs[msgs.length - 1] = { role: "ai", text: fullText, streaming: false, usedModel: capturedModel };
         return { ...c, messages: msgs };
       });
+
+      // Fire-and-forget memory extraction
+      extractMemories(activeChat.messages.slice(-6));
     } catch (e) {
       console.error("[Chat]", e);
       setError(e.message);
@@ -230,7 +247,18 @@ export default function Chat({ apiKey, notes, setNotes, model, setModel }) {
                   </div>
                 )}
                 {m.role === "ai" ? (
-                  <><ReactMarkdown>{m.text || " "}</ReactMarkdown>{m.streaming && <span className="stream-cursor" />}</>
+                  <>
+                    <ReactMarkdown>{m.text || " "}</ReactMarkdown>
+                    {m.images?.map((img, j) => (
+                      <img key={j} src={`data:${img.mimeType};base64,${img.data}`} style={{maxWidth:"100%",borderRadius:"8px",marginTop:"8px"}} alt="Generated image" />
+                    ))}
+                    {m.streaming && <span className="stream-cursor" />}
+                    {!m.streaming && m.usedModel && (
+                      <span style={{fontSize:"10px",opacity:0.5,display:"block",marginTop:"4px"}}>
+                        via {m.usedModel.replace("gemini-","").replace("-preview-06-17","")}
+                      </span>
+                    )}
+                  </>
                 ) : (
                   m.text && <span>{m.text}</span>
                 )}
