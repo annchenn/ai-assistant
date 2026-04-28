@@ -57,7 +57,6 @@ router.post("/extract", async (req, res) => {
     const result = await generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { thinkingConfig: { thinkingBudget: 0 } },
     });
     const raw = result.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
 

@@ -1,37 +1,7 @@
 [
   {
-    "id": "67096ec3-8b84-4d78-bba8-83bc8332410f",
-    "fact": "User is a 20-year-old CS student at NYCU.",
-    "created_at": "2026-04-28T00:46:19.837Z"
-  },
-  {
-    "id": "92e74b95-7dcb-4b1a-bb10-fbadb5b0b3be",
-    "fact": "The user wants to chat with the AI.",
-    "created_at": "2026-04-28T00:46:22.510Z"
-  },
-  {
-    "id": "10168afe-72e3-4d2b-b270-f6f7b3cdc82a",
-    "fact": "The user likes to dance to release stress.",
-    "created_at": "2026-04-28T00:47:12.368Z"
-  },
-  {
-    "id": "404be408-4dc4-42dc-ac31-430ef393b7c0",
-    "fact": "The user is 20 years old.",
-    "created_at": "2026-04-28T00:47:14.930Z"
-  },
-  {
-    "id": "62a74334-b898-45a7-b564-b5b6578284f3",
-    "fact": "The user is a CS student in NYCU.",
-    "created_at": "2026-04-28T00:47:14.931Z"
-  },
-  {
-    "id": "072c8282-8ad1-4dbb-8a2d-da66a1a85fea",
-    "fact": "You are a university student majoring in computer science.",
-    "created_at": "2026-04-28T00:48:05.999Z"
-  },
-  {
-    "id": "57e73d96-649b-4bb1-bfc6-8aa91a8f71d0",
-    "fact": "You have a note titled \"Homework\" that contains \"AI HW1\" and \"ML HW2\".",
-    "created_at": "2026-04-28T00:48:06.000Z"
+    "id": "dd7513b0-992c-49e1-861b-4773cc507b62",
+    "fact": "I am a student majoring in Computer Science",
+    "created_at": "2026-04-28T02:21:13.024Z"
   }
 ]

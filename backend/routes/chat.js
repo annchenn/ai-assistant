@@ -39,7 +39,9 @@ router.post("/", async (req, res) => {
     const memoriesList = memories.length
       ? memories.map((m) => `- ${m.fact}`).join("\n")
       : "(none)";
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" }); // YYYY-MM-DD
     const systemText = `You are a helpful AI assistant with access to the user's notes and long-term memory.
+Today's date is ${today} (Asia/Taipei timezone).
 
 User's notes:
 ${notesList}
@@ -113,7 +115,6 @@ Use tools when appropriate. For notes, only modify them when explicitly asked.`;
           contents: loopContents,
           config: {
             systemInstruction: systemText,
-            thinkingConfig: { thinkingBudget: 0 },
             ...(toolDecls.length ? { tools: [{ functionDeclarations: toolDecls }] } : {}),
           },
         });
@@ -134,19 +135,24 @@ Use tools when appropriate. For notes, only modify them when explicitly asked.`;
         console.log(`[chat] chunk ${chunkCount} finishReason=${candidate.finishReason} parts=${JSON.stringify(candidate.content?.parts || []).slice(0, 200)}`);
 
         for (const part of candidate.content?.parts || []) {
-          if (part.text) {
+          // Always push the full part so thoughtSignature is preserved for multi-turn
+          if (part.text !== undefined) {
             send({ type: "text", text: part.text });
             const existing = modelParts.find((p) => "text" in p);
-            if (existing) existing.text += part.text;
-            else modelParts.push({ text: part.text });
-          }
-          if (part.inlineData) {
+            if (existing) {
+              existing.text += part.text;
+              if (part.thoughtSignature) existing.thoughtSignature = part.thoughtSignature;
+            } else {
+              modelParts.push({ ...part });
+            }
+          } else if (part.inlineData) {
             send({ type: "image", image: part.inlineData.data, mimeType: part.inlineData.mimeType });
             modelParts.push({ inlineData: part.inlineData });
-          }
-          if (part.functionCall) {
+          } else if (part.functionCall) {
             functionCallData = part.functionCall;
             modelParts.push({ functionCall: part.functionCall });
+          } else {
+            modelParts.push({ ...part });
           }
         }
       }
