@@ -1,21 +1,23 @@
 import "dotenv/config";
-import { VertexAI } from "@google-cloud/vertexai";
+import { GoogleGenAI } from "@google/genai";
 
 const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
 
-let _vertexAI = null;
+let _ai = null;
 
 function getInstance() {
-  if (!_vertexAI) {
+  if (!_ai) {
     const project = process.env.GOOGLE_CLOUD_PROJECT;
     if (!project) throw new Error("GOOGLE_CLOUD_PROJECT env var is not set");
-    _vertexAI = new VertexAI({ project, location });
+    _ai = new GoogleGenAI({ vertexai: true, project, location });
   }
-  return _vertexAI;
+  return _ai;
 }
 
-export function getGenerativeModel(modelId) {
-  return getInstance().getGenerativeModel({ model: modelId });
+export function generateContentStream(params) {
+  return getInstance().models.generateContentStream(params);
 }
 
-export { getInstance as vertexAI };
+export function generateContent(params) {
+  return getInstance().models.generateContent(params);
+}

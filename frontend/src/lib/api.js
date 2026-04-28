@@ -1,10 +1,22 @@
 export const BACKEND_URL = "http://localhost:3001";
 
+export async function fetchChats() {
+  const res = await fetch(`${BACKEND_URL}/api/chats`);
+  return res.json();
+}
+
+export async function persistChats(chats) {
+  await fetch(`${BACKEND_URL}/api/chats`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(chats),
+  }).catch(() => {});
+}
+
 export const AVAILABLE_MODELS = [
-  { id: "auto",                              label: "Auto",           desc: "Smart routing" },
-  { id: "gemini-2.5-pro",                   label: "2.5 Pro",        desc: "Most capable" },
-  { id: "gemini-2.5-flash",                 label: "2.5 Flash",      desc: "Fast & smart" },
-  { id: "gemini-2.5-flash-lite-preview-06-17", label: "2.5 Flash Lite", desc: "Fastest" },
+  { id: "auto",              label: "Auto",     desc: "Smart routing" },
+  { id: "gemini-2.5-pro",   label: "2.5 Pro",  desc: "Most capable" },
+  { id: "gemini-2.5-flash", label: "2.5 Flash", desc: "Fast & smart" },
 ];
 
 export const DEFAULT_MODEL = "auto";
@@ -15,10 +27,22 @@ export const DEFAULT_MODEL = "auto";
  * The `onMeta` callback is called with the resolved model name when received.
  */
 export async function* streamChat(history, message, attachments, notes, memories, onMeta, model) {
+  // Strip binary image data from history to keep request size small
+  const cleanHistory = history.map(m => {
+    const hasImages = m.images?.length > 0;
+    return {
+      ...m,
+      // If AI message had images but no text, add a placeholder so context isn't empty
+      text: m.role === "ai" && hasImages && !m.text ? "[Image generated]" : m.text,
+      images: undefined,
+      attachments: m.attachments?.map(a => a.type === "image" ? { type: "image", name: a.name } : a),
+    };
+  });
+
   const res = await fetch(`${BACKEND_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ history, message, attachments, notes, memories, model }),
+    body: JSON.stringify({ history: cleanHistory, message, attachments, notes, memories, model }),
   });
 
   if (!res.ok) {

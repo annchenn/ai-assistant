@@ -1,13 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import {
-  createFile,
-  writeFile,
-  modifyFile,
-  readFile,
-  listFiles,
-  executeCode,
-} from "../lib/sandbox.js";
 
 // ---------------------------------------------------------------------------
 // MCP Server instance
@@ -68,6 +60,13 @@ registerTool(
   { title: z.string(), new_content: z.string() },
   async ({ title, new_content }) =>
     forwardToClient("update_note", { title, new_content })
+);
+
+registerTool(
+  "delete_note",
+  "Delete a note identified by title.",
+  { title: z.string() },
+  async ({ title }) => forwardToClient("delete_note", { title })
 );
 
 // ---------------------------------------------------------------------------
@@ -136,23 +135,41 @@ registerTool(
     try {
       const { getCalendarClient } = await import("../lib/google.js");
       const calendar = await getCalendarClient();
-      const timeMin = new Date(`${date}T00:00:00`).toISOString();
-      const timeMax = new Date(`${date}T23:59:59`).toISOString();
-      const res = await calendar.events.list({
-        calendarId: "primary",
-        timeMin,
-        timeMax,
-        singleEvents: true,
-        orderBy: "startTime",
+      // Use UTC boundaries covering the full date to avoid timezone issues
+      const timeMin = new Date(`${date}T00:00:00+08:00`).toISOString();
+      const timeMax = new Date(`${date}T23:59:59+08:00`).toISOString();
+
+      // Query all calendars the user has
+      const calListRes = await calendar.calendarList.list();
+      const calIds = (calListRes.data.items || []).map(c => c.id);
+      if (!calIds.length) calIds.push("primary");
+
+      const allEvents = [];
+      for (const calendarId of calIds) {
+        const res = await calendar.events.list({
+          calendarId,
+          timeMin,
+          timeMax,
+          singleEvents: true,
+          orderBy: "startTime",
+        });
+        allEvents.push(...(res.data.items || []));
+      }
+
+      // Sort by start time
+      allEvents.sort((a, b) => {
+        const ta = a.start?.dateTime || a.start?.date || "";
+        const tb = b.start?.dateTime || b.start?.date || "";
+        return ta.localeCompare(tb);
       });
-      const events = res.data.items || [];
-      if (events.length === 0) {
+
+      if (allEvents.length === 0) {
         return { content: [{ type: "text", text: `No events found for ${date}.` }] };
       }
-      const lines = events.map((e) => {
+      const lines = allEvents.map((e) => {
         const start = e.start?.dateTime || e.start?.date || "";
         const time = start.includes("T")
-          ? new Date(start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          ? new Date(start).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Taipei" })
           : "All day";
         return `- ${e.summary || "(no title)"} at ${time}`;
       });
@@ -178,15 +195,19 @@ registerTool(
 // ---------------------------------------------------------------------------
 registerTool(
   "read_gmail",
-  "Search Gmail messages and return a summary of matching emails.",
-  { query: z.string(), maxResults: z.number().optional().default(5) },
+  "Search Gmail messages. Use Gmail search syntax: 'newer_than:1d' for today, 'newer_than:7d' for this week, 'subject:homework' for subject search, etc. Combine with 'is:unread' to filter unread.",
+  { query: z.string(), maxResults: z.number().optional().default(10) },
   async ({ query, maxResults }) => {
     try {
       const { getGmailClient } = await import("../lib/google.js");
       const gmail = await getGmailClient();
+      // Normalize natural-language "today" to proper Gmail syntax
+      let gmailQuery = query;
+      if (/^today$|^today'?s?$/i.test(query.trim())) gmailQuery = "newer_than:1d";
+      console.log("[gmail] query:", gmailQuery);
       const listRes = await gmail.users.messages.list({
         userId: "me",
-        q: query,
+        q: gmailQuery,
         maxResults,
       });
       const messages = listRes.data.messages || [];
@@ -226,100 +247,6 @@ registerTool(
       }
       return { content: [{ type: "text", text: `Gmail error: ${err.message}` }] };
     }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// 6. File tools (sandboxed)
-// ---------------------------------------------------------------------------
-registerTool(
-  "create_file",
-  "Create a new file in the workspace with the given content.",
-  { path: z.string(), content: z.string() },
-  async ({ path: relPath, content }) => {
-    try {
-      await createFile(relPath, content);
-      return { content: [{ type: "text", text: `File created: ${relPath}` }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
-    }
-  }
-);
-
-registerTool(
-  "write_file",
-  "Overwrite a file in the workspace with the given content.",
-  { path: z.string(), content: z.string() },
-  async ({ path: relPath, content }) => {
-    try {
-      await writeFile(relPath, content);
-      return { content: [{ type: "text", text: `File written: ${relPath}` }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
-    }
-  }
-);
-
-registerTool(
-  "modify_file",
-  "Replace the first occurrence of old_text with new_text in a workspace file.",
-  { path: z.string(), old_text: z.string(), new_text: z.string() },
-  async ({ path: relPath, old_text, new_text }) => {
-    try {
-      await modifyFile(relPath, old_text, new_text);
-      return { content: [{ type: "text", text: `File modified: ${relPath}` }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
-    }
-  }
-);
-
-registerTool(
-  "read_file",
-  "Read the content of a file from the workspace.",
-  { path: z.string() },
-  async ({ path: relPath }) => {
-    try {
-      const content = await readFile(relPath);
-      return { content: [{ type: "text", text: content }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
-    }
-  }
-);
-
-registerTool(
-  "list_files",
-  "List files in a workspace directory (defaults to workspace root).",
-  { dir: z.string().optional().default("") },
-  async ({ dir }) => {
-    try {
-      const files = await listFiles(dir);
-      return {
-        content: [
-          { type: "text", text: files.length ? files.join("\n") : "(empty directory)" },
-        ],
-      };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// 7. execute_code
-// ---------------------------------------------------------------------------
-registerTool(
-  "execute_code",
-  "Execute a code snippet in a sandboxed environment. Supported languages: python, c, cpp.",
-  { language: z.enum(["python", "c", "cpp"]), code: z.string() },
-  async ({ language, code }) => {
-    const result = await executeCode(language, code);
-    const text =
-      `Exit code: ${result.exitCode}\n` +
-      (result.stdout ? `STDOUT:\n${result.stdout}\n` : "") +
-      (result.stderr ? `STDERR:\n${result.stderr}` : "");
-    return { content: [{ type: "text", text: text.trim() }] };
   }
 );
 

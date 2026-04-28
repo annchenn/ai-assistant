@@ -1,12 +1,15 @@
 import express from "express";
 import { routeModel } from "../lib/router.js";
-import { getGenerativeModel } from "../lib/vertexai.js";
+import { generateContentStream } from "../lib/vertexai.js";
 import { getGeminiFunctionDeclarations, dispatchToolCall } from "../lib/mcpBridge.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
-  // 1. Set SSE headers
+  const PROJECT = process.env.GOOGLE_CLOUD_PROJECT;
+  const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
+  console.log("[chat] POST received | PROJECT:", PROJECT, "| LOCATION:", LOCATION);
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -25,11 +28,11 @@ router.post("/", async (req, res) => {
       memories = [],
     } = req.body;
 
-    // 2. Route model
+    // 1. Route model
     const { model, isImageGen } = routeModel(message, attachments, requestedModel);
     send({ type: "meta", model });
 
-    // 3. Build system prompt
+    // 2. Build system prompt
     const notesList = notes.length
       ? notes.map((n) => `- "${n.title}": ${n.content.slice(0, 120)}`).join("\n")
       : "(no notes)";
@@ -46,7 +49,7 @@ ${memoriesList}
 
 Use tools when appropriate. For notes, only modify them when explicitly asked.`;
 
-    // 4. Build contents array
+    // 3. Build contents array
     const contents = [
       ...history
         .filter((m) => !m.streaming)
@@ -56,7 +59,6 @@ Use tools when appropriate. For notes, only modify them when explicitly asked.`;
         })),
     ];
 
-    // Add current user message with any attachments
     const userParts = [];
     if (message) userParts.push({ text: message });
     for (const att of attachments) {
@@ -68,38 +70,68 @@ Use tools when appropriate. For notes, only modify them when explicitly asked.`;
     }
     if (userParts.length) contents.push({ role: "user", parts: userParts });
 
-    // 5. Build request config
-    const genModel = getGenerativeModel(model);
-    const requestConfig = {
-      contents,
-      systemInstruction: { parts: [{ text: systemText }] },
-    };
-
+    // 4. Imagen 3 image generation (separate predict API)
     if (isImageGen) {
-      requestConfig.generationConfig = { responseModalities: ["TEXT", "IMAGE"] };
-      // No tools for image gen
-    } else {
-      const toolDecls = getGeminiFunctionDeclarations();
-      if (toolDecls.length) {
-        requestConfig.tools = [{ functionDeclarations: toolDecls }];
+      const { GoogleAuth } = await import("google-auth-library");
+      const auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
+      const token = await auth.getAccessToken();
+      const imagenUrl = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${LOCATION}/publishers/google/models/imagen-3.0-generate-002:predict`;
+      const imagenRes = await fetch(imagenUrl, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ instances: [{ prompt: message }], parameters: { sampleCount: 1 } }),
+      });
+      if (!imagenRes.ok) {
+        const errText = await imagenRes.text();
+        throw new Error(`Imagen API error ${imagenRes.status}: ${errText.slice(0, 200)}`);
       }
+      const imagenData = await imagenRes.json();
+      const b64 = imagenData.predictions?.[0]?.bytesBase64Encoded;
+      const mime = imagenData.predictions?.[0]?.mimeType || "image/png";
+      if (b64) {
+        send({ type: "image", image: b64, mimeType: mime });
+      } else {
+        send({ type: "text", text: "Image generation was blocked by safety filters. Try a different prompt." });
+      }
+      send({ type: "done" });
+      return;
     }
 
-    // 6. Stream loop (handles multi-turn function calling)
+    // 5. Regular Gemini chat — stream loop with function calling
+    const toolDecls = getGeminiFunctionDeclarations();
+    console.log("[chat] tools available:", toolDecls.map(t => t.name));
+
     let loopContents = [...contents];
 
     while (true) {
-      const streamResult = await genModel.generateContentStream({
-        ...requestConfig,
-        contents: loopContents,
-      });
+      console.log(`[chat] → model=${model} contents=${loopContents.length} tools=${toolDecls.length}`);
+
+      let streamResult;
+      try {
+        streamResult = await generateContentStream({
+          model,
+          contents: loopContents,
+          config: {
+            systemInstruction: systemText,
+            thinkingConfig: { thinkingBudget: 0 },
+            ...(toolDecls.length ? { tools: [{ functionDeclarations: toolDecls }] } : {}),
+          },
+        });
+      } catch (apiErr) {
+        console.error("[chat] generateContentStream threw:", apiErr.message);
+        throw apiErr;
+      }
 
       let modelParts = [];
       let functionCallData = null;
+      let chunkCount = 0;
 
-      for await (const chunk of streamResult.stream) {
+      for await (const chunk of streamResult) {
+        chunkCount++;
         const candidate = chunk.candidates?.[0];
         if (!candidate) continue;
+
+        console.log(`[chat] chunk ${chunkCount} finishReason=${candidate.finishReason} parts=${JSON.stringify(candidate.content?.parts || []).slice(0, 200)}`);
 
         for (const part of candidate.content?.parts || []) {
           if (part.text) {
@@ -119,15 +151,15 @@ Use tools when appropriate. For notes, only modify them when explicitly asked.`;
         }
       }
 
+      console.log(`[chat] stream ended after ${chunkCount} chunks, functionCall=${functionCallData?.name ?? "none"}`);
+
       if (!functionCallData) break;
 
-      // 7. Dispatch tool call
       const { name, args } = functionCallData;
+      console.log("[chat] dispatching tool:", name, JSON.stringify(args).slice(0, 200));
 
-      // Note tools are forwarded to client
-      if (["create_note", "append_to_note", "update_note"].includes(name)) {
+      if (["create_note", "append_to_note", "update_note", "delete_note"].includes(name)) {
         send({ type: "noteOp", name, args });
-        // Send a placeholder function response so the model can continue
         loopContents = [
           ...loopContents,
           { role: "model", parts: modelParts },
@@ -140,6 +172,7 @@ Use tools when appropriate. For notes, only modify them when explicitly asked.`;
         } catch (e) {
           toolResult = `Error: ${e.message}`;
         }
+        console.log("[chat] tool result:", String(toolResult).slice(0, 200));
 
         loopContents = [
           ...loopContents,

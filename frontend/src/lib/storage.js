@@ -15,7 +15,21 @@ export function loadChats() {
 }
 
 export function saveChats(chats) {
-  localStorage.setItem("chats", JSON.stringify(chats));
+  // Strip binary image data before persisting — base64 images can exceed localStorage's 5MB limit
+  const slim = chats.map(c => ({
+    ...c,
+    messages: c.messages.map(m => ({
+      ...m,
+      images: m.images?.map(img => ({ mimeType: img.mimeType })), // keep mime, drop data
+      attachments: m.attachments?.map(a => a.type === "image" ? { type: "image", name: a.name } : a),
+    })),
+  }));
+  try {
+    localStorage.setItem("chats", JSON.stringify(slim));
+  } catch {
+    // If still too large, save without messages
+    localStorage.setItem("chats", JSON.stringify(slim.map(c => ({ ...c, messages: [] }))));
+  }
 }
 
 export function createChat() {

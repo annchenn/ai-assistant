@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({ origin: "http://localhost:5173" }));
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 
 // GET /api/models — inline handler
 app.get("/api/models", (req, res) => {
@@ -35,6 +35,13 @@ try {
   app.use("/api/auth", authRouter);
 } catch (err) {
   console.warn("Warning: could not load /routes/auth.js —", err.message);
+}
+
+try {
+  const { default: chatsRouter } = await import("./routes/chats.js");
+  app.use("/api/chats", chatsRouter);
+} catch (err) {
+  console.warn("Warning: could not load /routes/chats.js —", err.message);
 }
 
 // Start server

@@ -48,15 +48,18 @@ router.post("/extract", async (req, res) => {
       .map((m) => `${m.role}: ${m.text}`)
       .join("\n");
 
-    const { getGenerativeModel } = await import("../lib/vertexai.js");
-    const model = getGenerativeModel("gemini-2.5-flash-lite-preview-06-17");
+    const { generateContent } = await import("../lib/vertexai.js");
     const prompt =
       "Extract factual statements about the user from this conversation as a JSON array of strings. " +
       "Only include facts explicitly stated. Return [] if none.\n\n" +
       transcript;
 
-    const result = await model.generateContent(prompt);
-    const raw = result.response.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+    const result = await generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { thinkingConfig: { thinkingBudget: 0 } },
+    });
+    const raw = result.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
 
     // Strip markdown code fences if present
     const jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();

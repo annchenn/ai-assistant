@@ -1,11 +1,10 @@
 export const AVAILABLE_MODELS = [
-  { id: "auto",                                 label: "Auto",           desc: "Smart routing" },
-  { id: "gemini-2.5-pro",                       label: "2.5 Pro",        desc: "Most capable" },
-  { id: "gemini-2.5-flash",                     label: "2.5 Flash",      desc: "Fast & smart" },
-  { id: "gemini-2.5-flash-lite-preview-06-17",  label: "2.5 Flash Lite", desc: "Fastest" },
+  { id: "auto",             label: "Auto",     desc: "Smart routing" },
+  { id: "gemini-2.5-pro",  label: "2.5 Pro",  desc: "Most capable" },
+  { id: "gemini-2.5-flash", label: "2.5 Flash", desc: "Fast & smart" },
 ];
 
-const IMAGE_GEN_RE = /\b(generate|draw|create an? image|paint|illustrate|picture of)\b/i;
+const IMAGE_GEN_RE = /\b(draw|paint|sketch|illustrate)\b|\b(generate|create|make|give me|show me|produce|render)\b.{0,30}\b(image|picture|photo|illustration|painting|artwork|drawing)\b|\b(image|picture|photo)\b.{0,20}\b(of|showing|with)\b/i;
 
 /**
  * Route a message to the appropriate model.
@@ -21,7 +20,7 @@ export function routeModel(message, attachments = [], requestedModel = "auto") {
 
   // 1. Image generation keywords
   if (IMAGE_GEN_RE.test(message)) {
-    return { model: "gemini-3.1-flash-image-preview", isImageGen: true };
+    return { model: "imagen-3.0-generate-002", isImageGen: true };
   }
 
   // 2. Has image attachments
@@ -37,13 +36,7 @@ export function routeModel(message, attachments = [], requestedModel = "auto") {
     return { model: "gemini-2.5-pro", isImageGen: false };
   }
 
-  // 4. Short simple factual query
-  if (
-    message.length < 60 &&
-    /^(what|who|when|where|define|translate)\b/i.test(message)
-  ) {
-    return { model: "gemini-2.5-flash-lite-preview-06-17", isImageGen: false };
-  }
+  // 4. Short simple factual query — fall through to default Flash
 
   // 5. Default
   return { model: "gemini-2.5-flash", isImageGen: false };

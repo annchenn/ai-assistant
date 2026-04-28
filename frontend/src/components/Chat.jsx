@@ -1,24 +1,32 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { streamChat, AVAILABLE_MODELS, extractMemories } from "../lib/api";
-import { loadChats, saveChats, createChat, createNote } from "../lib/storage";
+import { streamChat, AVAILABLE_MODELS, extractMemories, fetchChats, persistChats } from "../lib/api";
+import { createChat, createNote } from "../lib/storage";
 import "./Chat.css";
 
 export default function Chat({ notes, setNotes, model, setModel, memories }) {
-  const [chats,       setChats]       = useState(() => { const s = loadChats(); return s.length ? s : [createChat()]; });
-  const [activeId,    setActiveId]    = useState(() => { const s = loadChats(); return s.length ? s[0].id : null; });
+  const [chats,       setChats]       = useState([createChat()]);
+  const [activeId,    setActiveId]    = useState(null);
   const [input,       setInput]       = useState("");
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState(null);
-  const [attachments, setAttachments] = useState([]);   // [{type,name,mimeType?,data?,content?,preview?}]
-  const [toast,       setToast]       = useState(null); // {msg, ok}
+  const [attachments, setAttachments] = useState([]);
+  const [toast,       setToast]       = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef    = useRef(null);
   const fileInputRef = useRef(null);
   const usedModelRef = useRef(null);
 
-  useEffect(() => { if (!activeId && chats.length) setActiveId(chats[0].id); }, []);
-  useEffect(() => { saveChats(chats); }, [chats]);
+  // Load chats from backend on mount
+  useEffect(() => {
+    fetchChats().then(saved => {
+      if (saved?.length) { setChats(saved); setActiveId(saved[0].id); }
+      else { const c = createChat(); setChats([c]); setActiveId(c.id); }
+    }).catch(() => { const c = createChat(); setChats([c]); setActiveId(c.id); });
+  }, []);
+
+  // Persist chats to backend whenever they change
+  useEffect(() => { persistChats(chats); }, [chats]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chats, activeId, loading]);
 
   function showToast(msg, ok = true) {
@@ -61,6 +69,20 @@ export default function Chat({ notes, setNotes, model, setModel, memories }) {
         return n;
       }));
       if (found) showToast(`📝 Replaced note "${args.title}"`);
+      else showToast(`⚠️ Note "${args.title}" not found`, false);
+      return { success: found };
+    }
+
+    if (name === "delete_note") {
+      let found = false;
+      setNotes((prev) => {
+        const next = prev.filter((n) => {
+          if (n.title.toLowerCase().includes(args.title.toLowerCase())) { found = true; return false; }
+          return true;
+        });
+        return next;
+      });
+      if (found) showToast(`🗑️ Deleted note "${args.title}"`);
       else showToast(`⚠️ Note "${args.title}" not found`, false);
       return { success: found };
     }
@@ -140,6 +162,7 @@ export default function Chat({ notes, setNotes, model, setModel, memories }) {
     try {
       const history  = activeChat.messages;
       let   fullText = "";
+      let   hadNoteOp = false;
 
       for await (const chunk of streamChat(history, text, atts, notes, memories || [], (m) => { usedModelRef.current = m; }, model)) {
         if (typeof chunk === "string") {
@@ -158,14 +181,19 @@ export default function Chat({ notes, setNotes, model, setModel, memories }) {
             return { ...c, messages: msgs };
           });
         } else if (chunk.noteOp) {
+          hadNoteOp = true;
           await handleFunctionCall({ name: chunk.name, args: chunk.args });
         }
       }
 
+      // If model did a note op but sent no confirmation text, show a default
+      if (!fullText && hadNoteOp) fullText = "Done! Note updated.";
+
       const capturedModel = usedModelRef.current;
       updateChat(activeId, (c) => {
         const msgs = [...c.messages];
-        msgs[msgs.length - 1] = { role: "ai", text: fullText, streaming: false, usedModel: capturedModel };
+        const last = msgs[msgs.length - 1];
+        msgs[msgs.length - 1] = { ...last, text: fullText, streaming: false, usedModel: capturedModel };
         return { ...c, messages: msgs };
       });
 
